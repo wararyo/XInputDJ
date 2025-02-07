@@ -4,11 +4,16 @@ use rusty_xinput::XInputHandle;
 use tauri::{AppHandle, Emitter};
 
 lazy_static::lazy_static! {
-    static ref RUNNING: Arc<Mutex<bool>> = Arc::new(Mutex::new(true));
+    static ref RUNNING: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
 }
 
 pub fn start_xinput_thread(app_handle: AppHandle) {
     let running = Arc::clone(&RUNNING);
+    // すでにスレッドが動いている場合は何もしない
+    if *running.lock().unwrap() {
+        return;
+    }
+    *running.lock().unwrap() = true;
     thread::spawn(move || {
         let handle = XInputHandle::load_default().unwrap();
 
