@@ -1,12 +1,13 @@
 use std::sync::{Arc, Mutex};
 use std::thread;
 use rusty_xinput::XInputHandle;
+use tauri::{AppHandle, Emitter};
 
 lazy_static::lazy_static! {
     static ref RUNNING: Arc<Mutex<bool>> = Arc::new(Mutex::new(true));
 }
 
-pub fn start_xinput_thread() {
+pub fn start_xinput_thread(app_handle: AppHandle) {
     let running = Arc::clone(&RUNNING);
     thread::spawn(move || {
         let handle = XInputHandle::load_default().unwrap();
@@ -32,11 +33,9 @@ pub fn start_xinput_thread() {
                     if state.east_button() {
                         break;
                     } else {
-                        println!(
-                            "l: {:?}, r: {:?}",
-                            state.left_stick_normalized(),
-                            state.right_stick_normalized()
-                        );
+                        let left_stick = state.left_stick_normalized();
+                        let right_stick = state.right_stick_normalized();
+                        app_handle.emit_to("main", "gamepad_input", (left_stick, right_stick)).unwrap();
                     }
                 }
             }

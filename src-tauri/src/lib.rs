@@ -1,6 +1,7 @@
 mod xinput_handler;
 
 use crate::xinput_handler::{start_xinput_thread, stop_xinput_thread};
+use tauri::AppHandle;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -9,8 +10,8 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-fn start_gamepad_thread() {
-    start_xinput_thread();
+fn start_gamepad_thread(app_handle: AppHandle) {
+    start_xinput_thread(app_handle);
 }
 
 #[tauri::command]
