@@ -12,6 +12,14 @@ function App() {
     setGreetMsg(await invoke("greet", { name }));
   }
 
+  async function startGamepadThread() {
+    await invoke("start_gamepad_thread");
+  }
+
+  async function stopGamepadThread() {
+    await invoke("stop_gamepad_thread");
+  }
+
   return (
     <main className="container">
       <h1>Welcome to Tauri + React</h1>
@@ -44,6 +52,9 @@ function App() {
         <button type="submit">Greet</button>
       </form>
       <p>{greetMsg}</p>
+
+      <button onClick={startGamepadThread}>Start Gamepad Thread</button>
+      <button onClick={stopGamepadThread}>Stop Gamepad Thread</button>
     </main>
   );
 }
