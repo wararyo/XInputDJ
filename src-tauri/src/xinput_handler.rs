@@ -1,14 +1,20 @@
 use std::sync::{Arc, Mutex};
 use std::thread;
 use rusty_xinput::XInputHandle;
-use tauri::{AppHandle, Emitter};
+use std::sync::mpsc::Sender;
+
+#[derive(Debug)]
+pub struct StickState {
+    pub left: [f32; 2],
+    pub right: [f32; 2],
+}
 
 lazy_static::lazy_static! {
     static ref RUNNING: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
 }
 
 // XInputからの入力の受け取りを開始する
-pub fn start_xinput_thread(app_handle: AppHandle) {
+pub fn start_xinput_thread(stick_sender: Sender<StickState>) {
     let running = Arc::clone(&RUNNING);
     {
         // すでにスレッドが動いている場合は何もしない
@@ -23,7 +29,7 @@ pub fn start_xinput_thread(app_handle: AppHandle) {
         let handle = match XInputHandle::load_default() {
             Ok(h) => h,
             Err(e) => {
-                app_handle.emit_to("main", "gamepad_error", format!("Failed to initialize XInput: {:?}", e)).unwrap();
+                eprintln!("Failed to initialize XInput: {:?}", e);
                 return;
             }
         };
@@ -41,7 +47,7 @@ pub fn start_xinput_thread(app_handle: AppHandle) {
                 Err(e) => {
                     consecutive_errors += 1;
                     if consecutive_errors >= MAX_ERRORS {
-                        app_handle.emit_to("main", "gamepad_error", format!("Controller disconnected: {:?}", e)).unwrap();
+                        eprintln!("Controller disconnected: {:?}", e);
                         break;
                     }
                 }
@@ -52,8 +58,15 @@ pub fn start_xinput_thread(app_handle: AppHandle) {
                     } else {
                         let left_stick = state.left_stick_normalized();
                         let right_stick = state.right_stick_normalized();
-                        if let Err(e) = app_handle.emit_to("main", "gamepad_input", (left_stick, right_stick)) {
-                            eprintln!("Failed to emit gamepad input: {:?}", e);
+                        
+                        let stick_state = StickState {
+                            left: [left_stick.0, left_stick.1],
+                            right: [right_stick.0, right_stick.1],
+                        };
+                        
+                        if let Err(e) = stick_sender.send(stick_state) {
+                            eprintln!("Failed to send stick state: {:?}", e);
+                            break;
                         }
                     }
                 }

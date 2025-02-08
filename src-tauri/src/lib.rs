@@ -1,9 +1,10 @@
 mod xinput_handler;
 mod midi_handler;
+mod input_mapper;
 
 use crate::xinput_handler::{start_xinput_thread, stop_xinput_thread};
 use crate::midi_handler::{open_midi_port, close_midi_port, get_midi_ports, send_cc_change};
-use tauri::AppHandle;
+use crate::input_mapper::{start_mapping, stop_mapping};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -12,12 +13,14 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-fn start_gamepad_thread(app_handle: AppHandle) {
-    start_xinput_thread(app_handle);
+fn start_gamepad_thread() {
+    let stick_sender = start_mapping();
+    start_xinput_thread(stick_sender);
 }
 
 #[tauri::command]
 fn stop_gamepad_thread() {
+    stop_mapping();
     stop_xinput_thread();
 }
 
