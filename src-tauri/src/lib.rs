@@ -1,6 +1,8 @@
 mod xinput_handler;
+mod midi_handler;
 
 use crate::xinput_handler::{start_xinput_thread, stop_xinput_thread};
+use crate::midi_handler::{open_midi_port, close_midi_port, get_midi_ports, send_cc_change};
 use tauri::AppHandle;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -23,7 +25,15 @@ fn stop_gamepad_thread() {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, start_gamepad_thread, stop_gamepad_thread])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            start_gamepad_thread,
+            stop_gamepad_thread,
+            open_midi_port,
+            close_midi_port,
+            get_midi_ports,
+            send_cc_change
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

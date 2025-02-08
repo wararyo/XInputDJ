@@ -4,9 +4,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 
+interface MidiDevice {
+  port: number;
+  name: string;
+}
+
 function App() {
   const [greetMsg, setGreetMsg] = useState("");
   const [name, setName] = useState("");
+  const [midiDevices, setMidiDevices] = useState<MidiDevice[]>([]);
+  const [selectedMidiPort, setSelectedMidiPort] = useState<number | null>(null);
+  const [midiStatus, setMidiStatus] = useState<string>("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   type GamepadInput = [[number, number], [number, number]];
@@ -22,6 +30,38 @@ function App() {
       unlisten.then((f) => f());
     };
   }, []);
+
+  useEffect(() => {
+    const loadMidiDevices = async () => {
+      try {
+        const devices = await invoke<MidiDevice[]>("get_midi_ports");
+        setMidiDevices(devices);
+      } catch (error) {
+        console.error("Failed to get MIDI devices:", error);
+        setMidiStatus("MIDI devices not found");
+      }
+    };
+    loadMidiDevices();
+  }, []);
+
+  const handleMidiPortChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const portIndex = parseInt(event.target.value);
+    setSelectedMidiPort(portIndex);
+    
+    try {
+      const result = await invoke<string>("open_midi_port", { portIndex });
+      setMidiStatus(result);
+      // MIDIのCC（Control Change）メッセージを送信
+      await invoke("send_cc_change", { 
+        channel: 0,      // MIDIチャンネル (0-15)
+        controller: 11,   // コントローラー番号 (0-127)
+        value: 64        // コントロール値 (0-127)
+      });
+    } catch (error) {
+      console.error("Failed to open MIDI port:", error);
+      setMidiStatus(`Failed to open MIDI port: ${error}`);
+    }
+  };
 
   function drawSticks(leftStick: [number, number], rightStick: [number, number]) {
     const canvas = canvasRef.current;
@@ -92,7 +132,23 @@ function App() {
           <img src={reactLogo} className="logo react" alt="React logo" />
         </a>
       </div>
+
       <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+
+      <div className="midi-controls">
+        <select 
+          value={selectedMidiPort !== null ? selectedMidiPort : ""} 
+          onChange={handleMidiPortChange}
+        >
+          <option value="">Select MIDI Output</option>
+          {midiDevices.map((device) => (
+            <option key={device.port} value={device.port}>
+              {device.name}
+            </option>
+          ))}
+        </select>
+        <p>{midiStatus}</p>
+      </div>
 
       <form
         className="row"

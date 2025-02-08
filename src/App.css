@@ -95,6 +95,23 @@ button {
   margin-right: 5px;
 }
 
+.midi-controls {
+  margin: 20px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.midi-controls select {
+  min-width: 200px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background-color: #ffffff;
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;
@@ -112,5 +129,10 @@ button {
   }
   button:active {
     background-color: #0f0f0f69;
+  }
+
+  .midi-controls select {
+    color: #ffffff;
+    background-color: #0f0f0f98;
   }
 }
