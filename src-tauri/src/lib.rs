@@ -14,8 +14,8 @@ fn greet(name: &str) -> String {
 
 #[tauri::command]
 fn start_gamepad_thread() {
-    let stick_sender = start_mapping();
-    start_xinput_thread(stick_sender);
+    let controller_sender = start_mapping();
+    start_xinput_thread(controller_sender);
 }
 
 #[tauri::command]

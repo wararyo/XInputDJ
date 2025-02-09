@@ -9,12 +9,36 @@ pub struct StickState {
     pub right: [f32; 2],
 }
 
+#[derive(Debug)]
+pub struct ButtonState {
+    pub south: bool,
+    pub east: bool,
+    pub west: bool,
+    pub north: bool,
+    pub up: bool,
+    pub down: bool,
+    pub left: bool,
+    pub right: bool,
+    pub l: bool,
+    pub lt: bool,
+    pub r: bool,
+    pub rt: bool,
+    pub l_stick: bool,
+    pub r_stick: bool,
+}
+
+#[derive(Debug)]
+pub struct ControllerState {
+    pub sticks: StickState,
+    pub buttons: ButtonState,
+}
+
 lazy_static::lazy_static! {
     static ref RUNNING: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
 }
 
 // XInputからの入力の受け取りを開始する
-pub fn start_xinput_thread(stick_sender: Sender<StickState>) {
+pub fn start_xinput_thread(state_sender: Sender<ControllerState>) {
     let running = Arc::clone(&RUNNING);
     {
         // すでにスレッドが動いている場合は何もしない
@@ -53,21 +77,36 @@ pub fn start_xinput_thread(stick_sender: Sender<StickState>) {
                 }
                 Ok(state) => {
                     consecutive_errors = 0;
-                    if state.east_button() {
-                        break;
-                    } else {
-                        let left_stick = state.left_stick_normalized();
-                        let right_stick = state.right_stick_normalized();
-                        
-                        let stick_state = StickState {
+                    
+                    let left_stick = state.left_stick_normalized();
+                    let right_stick = state.right_stick_normalized();
+                    
+                    let controller_state = ControllerState {
+                        sticks: StickState {
                             left: [left_stick.0, left_stick.1],
                             right: [right_stick.0, right_stick.1],
-                        };
-                        
-                        if let Err(e) = stick_sender.send(stick_state) {
-                            eprintln!("Failed to send stick state: {:?}", e);
-                            break;
-                        }
+                        },
+                        buttons: ButtonState {
+                            south: state.south_button(),      // A button
+                            east: state.east_button(),        // B button
+                            west: state.west_button(),        // X button
+                            north: state.north_button(),      // Y button
+                            up: state.arrow_up(),
+                            down: state.arrow_down(),
+                            left: state.arrow_left(),
+                            right: state.arrow_right(),
+                            l: state.left_shoulder(),
+                            lt: state.left_trigger_bool(),
+                            r: state.right_shoulder(),
+                            rt: state.right_trigger_bool(),
+                            l_stick: state.left_thumb_button(),
+                            r_stick: state.right_thumb_button(),
+                        },
+                    };
+                    
+                    if let Err(e) = state_sender.send(controller_state) {
+                        eprintln!("Failed to send controller state: {:?}", e);
+                        break;
                     }
                 }
             }
