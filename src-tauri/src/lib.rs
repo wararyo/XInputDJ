@@ -16,7 +16,11 @@ fn greet(name: &str) -> String {
 fn start_system(midi_port: String) -> Result<String, String> {
     open_midi_port(midi_port)?;
     let controller_sender = start_mapping();
-    start_xinput_thread(controller_sender);
+    if let Err(e) = start_xinput_thread(controller_sender) {
+        stop_mapping();
+        close_midi_port();
+        return Err(e);
+    }
     Ok("System started".to_string())
 }
 

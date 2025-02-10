@@ -38,26 +38,32 @@ lazy_static::lazy_static! {
 }
 
 // XInputからの入力の受け取りを開始する
-pub fn start_xinput_thread(state_sender: Sender<ControllerState>) {
+pub fn start_xinput_thread(state_sender: Sender<ControllerState>) -> Result<(), String> {
     let running = Arc::clone(&RUNNING);
     {
         // すでにスレッドが動いている場合は何もしない
         let mut guard = running.lock().unwrap();
         if *guard {
-            return;
+            return Ok(());
         }
         *guard = true;
     }
 
-    thread::spawn(move || {
-        let handle = match XInputHandle::load_default() {
-            Ok(h) => h,
-            Err(e) => {
-                eprintln!("Failed to initialize XInput: {:?}", e);
-                return;
-            }
-        };
+    let handle = XInputHandle::load_default()
+        .map_err(|e| {
+            *running.lock().unwrap() = false;
+            format!("Failed to initialize XInput: {:?}", e)
+        })?;
 
+    // 初回にコントローラーの状態が取得できなければエラーとする
+    // 現状のコードではスレッド開始後にコントローラーが切断された場合にエラーを通知できないが、一旦許容する
+    handle.get_state(0)
+        .map_err(|e| {
+            *running.lock().unwrap() = false;
+            format!("Failed to get initial controller state: {:?}", e)
+        })?;
+
+    thread::spawn(move || {
         let mut consecutive_errors = 0;
         const MAX_ERRORS: u32 = 5; // この回数だけエラーが続いたらコントローラーが切断されたとみなす
 
@@ -114,6 +120,8 @@ pub fn start_xinput_thread(state_sender: Sender<ControllerState>) {
 
         *running.lock().unwrap() = false;
     });
+
+    Ok(())
 }
 
 // XInputからの入力の受け取りを停止する
