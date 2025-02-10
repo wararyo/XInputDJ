@@ -9,6 +9,10 @@ interface MidiDevice {
   name: string;
 }
 
+interface Settings {
+  default_midi_port: string | null;
+}
+
 function App() {
   const [greetMsg, setGreetMsg] = useState("");
   const [name, setName] = useState("");
@@ -33,16 +37,21 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const loadMidiDevices = async () => {
+    const loadInitialState = async () => {
       try {
         const devices = await invoke<MidiDevice[]>("get_midi_ports");
         setMidiDevices(devices);
+
+        const settings = await invoke<Settings>("get_settings");
+        if (settings.default_midi_port) {
+          setSelectedMidiPort(settings.default_midi_port);
+        }
       } catch (error) {
-        console.error("Failed to get MIDI devices:", error);
-        setMidiStatus("MIDI devices not found");
+        console.error("Failed to load initial state:", error);
+        setMidiStatus(`Failed to load settings: ${error}`);
       }
     };
-    loadMidiDevices();
+    loadInitialState();
   }, []);
 
   const handleMidiPortChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
