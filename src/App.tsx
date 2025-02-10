@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 
 interface MidiDevice {
-  port: number;
+  id: string;
   name: string;
 }
 
@@ -13,8 +13,9 @@ function App() {
   const [greetMsg, setGreetMsg] = useState("");
   const [name, setName] = useState("");
   const [midiDevices, setMidiDevices] = useState<MidiDevice[]>([]);
-  const [selectedMidiPort, setSelectedMidiPort] = useState<number | null>(null);
+  const [selectedMidiPort, setSelectedMidiPort] = useState<string | null>(null);
   const [midiStatus, setMidiStatus] = useState<string>("");
+  const [isRunning, setIsRunning] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   type GamepadInput = [[number, number], [number, number]];
@@ -44,23 +45,8 @@ function App() {
     loadMidiDevices();
   }, []);
 
-  const handleMidiPortChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const portIndex = parseInt(event.target.value);
-    setSelectedMidiPort(portIndex);
-    
-    try {
-      const result = await invoke<string>("open_midi_port", { portIndex });
-      setMidiStatus(result);
-      // MIDIのCC（Control Change）メッセージを送信
-      await invoke("send_cc_change", { 
-        channel: 0,      // MIDIチャンネル (0-15)
-        controller: 11,   // コントローラー番号 (0-127)
-        value: 64        // コントロール値 (0-127)
-      });
-    } catch (error) {
-      console.error("Failed to open MIDI port:", error);
-      setMidiStatus(`Failed to open MIDI port: ${error}`);
-    }
+  const handleMidiPortChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedMidiPort(event.target.value);
   };
 
   function drawSticks(leftStick: [number, number], rightStick: [number, number]) {
@@ -109,12 +95,32 @@ function App() {
     setGreetMsg(await invoke("greet", { name }));
   }
 
-  async function startGamepadThread() {
-    await invoke("start_gamepad_thread");
+  async function startSystem() {
+    if (!selectedMidiPort) {
+      setMidiStatus("Please select a MIDI port first");
+      return;
+    }
+
+    try {
+      const result = await invoke<string>("start_system", { midiPort: selectedMidiPort });
+      setMidiStatus(result);
+      setIsRunning(true);
+    } catch (error) {
+      console.error("Failed to start system:", error);
+      setMidiStatus(`Failed to start system: ${error}`);
+      setIsRunning(false);
+    }
   }
 
-  async function stopGamepadThread() {
-    await invoke("stop_gamepad_thread");
+  async function stopSystem() {
+    try {
+      await invoke("stop_system");
+      setMidiStatus("System stopped");
+      setIsRunning(false);
+    } catch (error) {
+      console.error("Failed to stop system:", error);
+      setMidiStatus(`Failed to stop system: ${error}`);
+    }
   }
 
   return (
@@ -139,15 +145,23 @@ function App() {
         <select 
           value={selectedMidiPort !== null ? selectedMidiPort : ""} 
           onChange={handleMidiPortChange}
+          disabled={isRunning}
         >
           <option value="">Select MIDI Output</option>
           {midiDevices.map((device) => (
-            <option key={device.port} value={device.port}>
+            <option key={device.id} value={device.id}>
               {device.name}
             </option>
           ))}
         </select>
         <p>{midiStatus}</p>
+
+        <button 
+          onClick={isRunning ? stopSystem : startSystem}
+          disabled={!selectedMidiPort && !isRunning}
+        >
+          {isRunning ? "Stop" : "Start"}
+        </button>
       </div>
 
       <form
@@ -165,9 +179,6 @@ function App() {
         <button type="submit">Greet</button>
       </form>
       <p>{greetMsg}</p>
-
-      <button onClick={startGamepadThread}>Start Gamepad Thread</button>
-      <button onClick={stopGamepadThread}>Stop Gamepad Thread</button>
 
       <canvas ref={canvasRef} width={600} height={300} style={{ border: "1px solid black" }}></canvas>
     </main>

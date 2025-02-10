@@ -1,6 +1,5 @@
 use midir::{MidiOutput, MidiOutputConnection};
 use std::sync::Mutex;
-use tauri::AppHandle;
 
 lazy_static::lazy_static! {
     static ref MIDI_CONNECTION: Mutex<Option<MidiOutputConnection>> = Mutex::new(None);
@@ -8,7 +7,7 @@ lazy_static::lazy_static! {
 
 #[derive(serde::Serialize)]
 pub struct MidiDevice {
-    port: usize,
+    id: String,
     name: String,
 }
 
@@ -18,10 +17,10 @@ pub fn get_midi_ports() -> Result<Vec<MidiDevice>, String> {
     let ports = midi_out.ports();
     let mut devices = Vec::new();
 
-    for (i, port) in ports.iter().enumerate() {
+    for (_, port) in ports.iter().enumerate() {
         if let Ok(name) = midi_out.port_name(port) {
             devices.push(MidiDevice {
-                port: i,
+                id: port.id(),
                 name,
             });
         }
@@ -30,34 +29,29 @@ pub fn get_midi_ports() -> Result<Vec<MidiDevice>, String> {
     Ok(devices)
 }
 
-#[tauri::command]
-pub fn open_midi_port(port_index: usize, _app_handle: AppHandle) -> Result<String, String> {
+pub fn open_midi_port(port_id: String) -> Result<String, String> {
     let midi_out = MidiOutput::new("XInputDJ").map_err(|e| e.to_string())?;
-    let ports = midi_out.ports();
+    let port_id_clone = port_id.clone();
     
-    if port_index >= ports.len() {
-        return Err("Invalid port index".to_string());
+    if let Some(port) = midi_out.find_port_by_id(port_id) {
+        let port_name = midi_out.port_name(&port).map_err(|e| e.to_string())?;
+        let conn = midi_out.connect(&port, "XInputDJ-Output")
+            .map_err(|e| e.to_string())?;
+        
+        let mut midi_conn = MIDI_CONNECTION.lock().unwrap();
+        *midi_conn = Some(conn);
+
+        Ok(format!("Connected to MIDI device: {}", port_name))
+    } else {
+        Err(format!("MIDI port {} not found", port_id_clone))
     }
-
-    let port = &ports[port_index];
-    let port_name = midi_out.port_name(port).map_err(|e| e.to_string())?;
-    
-    let conn = midi_out.connect(port, "XInputDJ-Output")
-        .map_err(|e| e.to_string())?;
-
-    let mut midi_conn = MIDI_CONNECTION.lock().unwrap();
-    *midi_conn = Some(conn);
-
-    Ok(format!("Connected to MIDI device: {}", port_name))
 }
 
-#[tauri::command]
 pub fn close_midi_port() {
     let mut midi_conn = MIDI_CONNECTION.lock().unwrap();
     *midi_conn = None;
 }
 
-#[tauri::command]
 pub fn send_cc_change(channel: u8, controller: u8, value: u8) -> Result<(), String> {
     let mut midi_conn = MIDI_CONNECTION.lock().unwrap();
     if let Some(conn) = midi_conn.as_mut() {
