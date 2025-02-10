@@ -31,29 +31,29 @@ struct CCMapping {
 lazy_static::lazy_static! {
     static ref RUNNING: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
     static ref CURRENT_CC: Arc<Mutex<[(StickType, u8); 2]>> = Arc::new(Mutex::new([
-        (StickType::Left, 11),
-        (StickType::Right, 1),
+        (StickType::Left, 28),
+        (StickType::Right, 28),
     ]));
 
     // すべてのCCマッピング
     static ref CC_MAPPINGS: Vec<CCMapping> = vec![
         // 左スティックのマッピング
-        CCMapping { button_getter: |b| b.down, cc_number: 1, description: "Down", stick: StickType::Left },
-        CCMapping { button_getter: |b| b.left, cc_number: 2, description: "Left", stick: StickType::Left },
-        CCMapping { button_getter: |b| b.up, cc_number: 3, description: "Up", stick: StickType::Left },
-        CCMapping { button_getter: |b| b.right, cc_number: 4, description: "Right", stick: StickType::Left },
-        CCMapping { button_getter: |b| b.l, cc_number: 5, description: "L", stick: StickType::Left },
-        CCMapping { button_getter: |b| b.lt, cc_number: 6, description: "LT", stick: StickType::Left },
-        CCMapping { button_getter: |b| b.l_stick, cc_number: 7, description: "L stick", stick: StickType::Left },
+        CCMapping { button_getter: |b| b.down, cc_number: 25, description: "Down", stick: StickType::Left },
+        CCMapping { button_getter: |b| b.left, cc_number: 26, description: "Left", stick: StickType::Left },
+        CCMapping { button_getter: |b| b.up, cc_number: 24, description: "Up", stick: StickType::Left },
+        CCMapping { button_getter: |b| b.right, cc_number: 23, description: "Right", stick: StickType::Left },
+        CCMapping { button_getter: |b| b.l, cc_number: 28, description: "L", stick: StickType::Left },
+        CCMapping { button_getter: |b| b.lt, cc_number: 9, description: "LT", stick: StickType::Left },
+        CCMapping { button_getter: |b| b.l_stick, cc_number: 6, description: "L stick", stick: StickType::Left },
         
         // 右スティックのマッピング
-        CCMapping { button_getter: |b| b.south, cc_number: 1, description: "South", stick: StickType::Right },
-        CCMapping { button_getter: |b| b.east, cc_number: 2, description: "East", stick: StickType::Right },
-        CCMapping { button_getter: |b| b.north, cc_number: 3, description: "North", stick: StickType::Right },
-        CCMapping { button_getter: |b| b.west, cc_number: 4, description: "West", stick: StickType::Right },
-        CCMapping { button_getter: |b| b.r, cc_number: 5, description: "R", stick: StickType::Right },
-        CCMapping { button_getter: |b| b.rt, cc_number: 6, description: "RT", stick: StickType::Right },
-        CCMapping { button_getter: |b| b.r_stick, cc_number: 7, description: "R stick", stick: StickType::Right },
+        CCMapping { button_getter: |b| b.south, cc_number: 25, description: "South", stick: StickType::Right },
+        CCMapping { button_getter: |b| b.east, cc_number: 26, description: "East", stick: StickType::Right },
+        CCMapping { button_getter: |b| b.north, cc_number: 24, description: "North", stick: StickType::Right },
+        CCMapping { button_getter: |b| b.west, cc_number: 23, description: "West", stick: StickType::Right },
+        CCMapping { button_getter: |b| b.r, cc_number: 28, description: "R", stick: StickType::Right },
+        CCMapping { button_getter: |b| b.rt, cc_number: 9, description: "RT", stick: StickType::Right },
+        CCMapping { button_getter: |b| b.r_stick, cc_number: 6, description: "R stick", stick: StickType::Right },
     ];
 }
 
@@ -171,7 +171,6 @@ fn process_cc_mapping(state: &ControllerState, last_left_cc: &mut u8, last_right
                     update_cc_if_changed(StickType::Right, mapping.cc_number, mapping.description, last_right_cc);
                 }
             }
-            break;
         }
     }
 }
