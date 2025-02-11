@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
@@ -14,7 +14,7 @@ interface Settings {
 function App() {
   const [midiDevices, setMidiDevices] = useState<MidiDevice[]>([]);
   const [selectedMidiPort, setSelectedMidiPort] = useState<string | null>(null);
-  const [midiStatus, setMidiStatus] = useState<string>("");
+  const [statusMessage, setStatusMessage] = useState<string>("");
   const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
@@ -29,7 +29,7 @@ function App() {
         }
       } catch (error) {
         console.error("Failed to load initial state:", error);
-        setMidiStatus(`Failed to load settings: ${error}`);
+        setStatusMessage(`Failed to load settings: ${error}`);
       }
     };
     loadInitialState();
@@ -41,17 +41,17 @@ function App() {
 
   async function startSystem() {
     if (!selectedMidiPort) {
-      setMidiStatus("Please select a MIDI port first");
+      setStatusMessage("Please select a MIDI port first");
       return;
     }
 
     try {
       const result = await invoke<string>("start_system", { midiPort: selectedMidiPort });
-      setMidiStatus(result);
+      setStatusMessage(result);
       setIsRunning(true);
     } catch (error) {
       console.error("Failed to start system:", error);
-      setMidiStatus(`Failed to start system: ${error}`);
+      setStatusMessage(`Failed to start system: ${error}`);
       setIsRunning(false);
     }
   }
@@ -59,11 +59,11 @@ function App() {
   async function stopSystem() {
     try {
       await invoke("stop_system");
-      setMidiStatus("System stopped");
+      setStatusMessage("System stopped");
       setIsRunning(false);
     } catch (error) {
       console.error("Failed to stop system:", error);
-      setMidiStatus(`Failed to stop system: ${error}`);
+      setStatusMessage(`Failed to stop system: ${error}`);
     }
   }
 
@@ -82,7 +82,7 @@ function App() {
             </option>
           ))}
         </select>
-        <p>{midiStatus}</p>
+        <p>{statusMessage}</p>
 
         <button 
           onClick={isRunning ? stopSystem : startSystem}

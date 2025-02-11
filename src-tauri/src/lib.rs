@@ -10,6 +10,7 @@ use crate::settings::Settings;
 
 #[tauri::command]
 fn start_system(midi_port: String) -> Result<String, String> {
+    let midi_port_clone = midi_port.clone();
     open_midi_port(midi_port)?;
     let controller_sender = start_mapping();
     if let Err(e) = start_xinput_thread(controller_sender) {
@@ -18,7 +19,7 @@ fn start_system(midi_port: String) -> Result<String, String> {
         return Err(e);
     }
     // 接続したMIDIポートを保存
-    Settings::set_default_midi_port(Some(midi_port.clone()))?;
+    Settings::set_default_midi_port(Some(midi_port_clone))?;
     Ok("System started".to_string())
 }
 

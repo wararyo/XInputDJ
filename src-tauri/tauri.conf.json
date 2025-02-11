@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "xinputdj",
-        "width": 800,
-        "height": 600
+        "title": "XInputDJ",
+        "width": 640,
+        "height": 320
       }
     ],
     "security": {
