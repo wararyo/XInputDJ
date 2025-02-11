@@ -91,10 +91,6 @@ button {
   outline: none;
 }
 
-#greet-input {
-  margin-right: 5px;
-}
-
 .midi-controls {
   margin: 20px 0;
   display: flex;

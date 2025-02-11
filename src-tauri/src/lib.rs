@@ -8,12 +8,6 @@ use crate::midi_handler::{open_midi_port, close_midi_port, get_midi_ports};
 use crate::input_mapper::{start_mapping, stop_mapping};
 use crate::settings::Settings;
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 #[tauri::command]
 fn start_system(midi_port: String) -> Result<String, String> {
     open_midi_port(midi_port)?;
@@ -45,7 +39,6 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
             start_system,
             stop_system,
             get_midi_ports,
