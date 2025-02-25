@@ -5,7 +5,7 @@ use std::thread;
 use std::f32::consts::PI;
 use crate::xinput_handler::{ControllerState, ButtonState};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum StickType {
     Left,
     Right,
@@ -20,12 +20,20 @@ impl StickType {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+// スティックからCC値の変換方法
+enum Behavior {
+    Absolute,    // 通常の角度→CC値の変換
+    Relative // 角度の差分→CC値の変換
+}
+
 // CCマッピング用の構造体
 struct CCMapping {
     button_getter: fn(&ButtonState) -> bool,
     cc_number: u8,
     description: &'static str,
     stick: StickType,
+    behavior: Behavior,
 }
 
 lazy_static::lazy_static! {
@@ -34,26 +42,30 @@ lazy_static::lazy_static! {
         (StickType::Left, 28),
         (StickType::Right, 28),
     ]));
+    static ref LAST_STICK_POS: Arc<Mutex<[(f32, f32); 2]>> = Arc::new(Mutex::new([
+        (0.0, 0.0), // Left stick (x, y)
+        (0.0, 0.0), // Right stick (x, y)
+    ]));
 
     // すべてのCCマッピング
     static ref CC_MAPPINGS: Vec<CCMapping> = vec![
         // 左スティックのマッピング
-        CCMapping { button_getter: |b| b.down, cc_number: 25, description: "Down", stick: StickType::Left },
-        CCMapping { button_getter: |b| b.left, cc_number: 26, description: "Left", stick: StickType::Left },
-        CCMapping { button_getter: |b| b.up, cc_number: 24, description: "Up", stick: StickType::Left },
-        CCMapping { button_getter: |b| b.right, cc_number: 23, description: "Right", stick: StickType::Left },
-        CCMapping { button_getter: |b| b.l, cc_number: 28, description: "L", stick: StickType::Left },
-        CCMapping { button_getter: |b| b.lt, cc_number: 9, description: "LT", stick: StickType::Left },
-        CCMapping { button_getter: |b| b.l_stick, cc_number: 6, description: "L stick", stick: StickType::Left },
+        CCMapping { button_getter: |b| b.down, cc_number: 25, description: "Down", stick: StickType::Left, behavior: Behavior::Absolute },
+        CCMapping { button_getter: |b| b.left, cc_number: 26, description: "Left", stick: StickType::Left, behavior: Behavior::Absolute },
+        CCMapping { button_getter: |b| b.up, cc_number: 24, description: "Up", stick: StickType::Left, behavior: Behavior::Absolute },
+        CCMapping { button_getter: |b| b.right, cc_number: 23, description: "Right", stick: StickType::Left, behavior: Behavior::Absolute },
+        CCMapping { button_getter: |b| b.l, cc_number: 28, description: "L", stick: StickType::Left, behavior: Behavior::Absolute },
+        CCMapping { button_getter: |b| b.lt, cc_number: 9, description: "LT", stick: StickType::Left, behavior: Behavior::Absolute },
+        CCMapping { button_getter: |b| b.l_stick, cc_number: 6, description: "L stick", stick: StickType::Left, behavior: Behavior::Relative },
         
         // 右スティックのマッピング
-        CCMapping { button_getter: |b| b.south, cc_number: 25, description: "South", stick: StickType::Right },
-        CCMapping { button_getter: |b| b.east, cc_number: 26, description: "East", stick: StickType::Right },
-        CCMapping { button_getter: |b| b.north, cc_number: 24, description: "North", stick: StickType::Right },
-        CCMapping { button_getter: |b| b.west, cc_number: 23, description: "West", stick: StickType::Right },
-        CCMapping { button_getter: |b| b.r, cc_number: 28, description: "R", stick: StickType::Right },
-        CCMapping { button_getter: |b| b.rt, cc_number: 9, description: "RT", stick: StickType::Right },
-        CCMapping { button_getter: |b| b.r_stick, cc_number: 6, description: "R stick", stick: StickType::Right },
+        CCMapping { button_getter: |b| b.south, cc_number: 25, description: "South", stick: StickType::Right, behavior: Behavior::Absolute },
+        CCMapping { button_getter: |b| b.east, cc_number: 26, description: "East", stick: StickType::Right, behavior: Behavior::Absolute },
+        CCMapping { button_getter: |b| b.north, cc_number: 24, description: "North", stick: StickType::Right, behavior: Behavior::Absolute },
+        CCMapping { button_getter: |b| b.west, cc_number: 23, description: "West", stick: StickType::Right, behavior: Behavior::Absolute },
+        CCMapping { button_getter: |b| b.r, cc_number: 28, description: "R", stick: StickType::Right, behavior: Behavior::Absolute },
+        CCMapping { button_getter: |b| b.rt, cc_number: 9, description: "RT", stick: StickType::Right, behavior: Behavior::Absolute },
+        CCMapping { button_getter: |b| b.r_stick, cc_number: 6, description: "R stick", stick: StickType::Right, behavior: Behavior::Relative },
     ];
 }
 
@@ -107,7 +119,7 @@ pub fn stop_mapping() {
     *running = false;
 }
 
-fn calculate_midi_cc_value(x: f32, y: f32, deadzone: f32) -> Option<u8> {
+fn calculate_midi_cc_value_absolute(x: f32, y: f32, deadzone: f32) -> Option<u8> {
     let distance = (x * x + y * y).sqrt();
     
     if distance < deadzone {
@@ -126,6 +138,54 @@ fn calculate_midi_cc_value(x: f32, y: f32, deadzone: f32) -> Option<u8> {
 
     // MIDI値に変換（0-127）
     Some((value * 127.0) as u8)
+}
+
+fn calculate_midi_cc_value_relative(x: f32, y: f32, stick: StickType, deadzone: f32) -> Option<u8> {
+    let distance = (x * x + y * y).sqrt();
+    let angle = f32::atan2(x, y);
+    let mut last_stick_pos = LAST_STICK_POS.lock().unwrap();
+    let stick_idx = match stick {
+        StickType::Left => 0,
+        StickType::Right => 1,
+    };
+
+    // デッドゾーン内の場合は何もしない
+    if distance < deadzone {
+        last_stick_pos[stick_idx] = (0.0, 0.0);
+        return None;
+    }
+
+    // 初回の場合は現在の角度を保存して終了
+    if last_stick_pos[stick_idx] == (0.0, 0.0) {
+        last_stick_pos[stick_idx] = (x, y);
+        return None;
+    }
+    
+    let last_angle = f32::atan2(last_stick_pos[stick_idx].0, last_stick_pos[stick_idx].1);
+    
+    // 角度の差分を計算（-π から π の範囲）
+    let mut diff = angle - last_angle;
+    
+    // 境界をまたぐ場合の補正
+    if diff > PI {
+        diff -= 2.0 * PI;
+    } else if diff < -PI {
+        diff += 2.0 * PI;
+    }
+    
+    // 一周を720として正規化
+    let normalized = diff / (PI * 2.0) * 720.0;
+    let mut value = normalized.round().min(127.0).max(-127.0) as i32;
+    if value < 0 {
+        value += 128;
+    }
+    if value == 0 {
+        return None;
+    } else {
+        // 現在の角度を保存
+        last_stick_pos[stick_idx] = (x, y);
+        return Some(value as u8);
+    }
 }
 
 fn update_cc_if_changed(stick: StickType, new_cc: u8, description: &str, last_cc: &mut u8) -> bool {
@@ -147,8 +207,19 @@ fn update_cc_if_changed(stick: StickType, new_cc: u8, description: &str, last_cc
 }
 
 fn process_stick(x: f32, y: f32, cc: u8, stick: StickType, deadzone: f32) {
-    if let Some(midi_value) = calculate_midi_cc_value(x, y, deadzone) {
-        if let Err(e) = send_cc_change(stick.midi_channel(), cc, midi_value) {
+    // 現在のCCに対応するBehaviorを取得
+    let behavior = CC_MAPPINGS.iter()
+        .find(|m| m.cc_number == cc && m.stick == stick)
+        .map(|m| m.behavior)
+        .unwrap_or(Behavior::Absolute);
+
+    let midi_value = match behavior {
+        Behavior::Absolute => calculate_midi_cc_value_absolute(x, y, deadzone),
+        Behavior::Relative => calculate_midi_cc_value_relative(x, y, stick, deadzone),
+    };
+
+    if let Some(value) = midi_value {
+        if let Err(e) = send_cc_change(stick.midi_channel(), cc, value) {
             eprintln!("Failed to send MIDI CC ({} Stick): {:?}", 
                 match stick {
                     StickType::Left => "Left",
