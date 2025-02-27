@@ -9,7 +9,7 @@ pub struct StickState {
     pub right: [f32; 2],
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ButtonState {
     pub south: bool,
     pub east: bool,
@@ -25,6 +25,8 @@ pub struct ButtonState {
     pub rt: bool,
     pub l_stick: bool,
     pub r_stick: bool,
+    pub start: bool,
+    pub select: bool,
 }
 
 #[derive(Debug)]
@@ -107,6 +109,8 @@ pub fn start_xinput_thread(state_sender: Sender<ControllerState>) -> Result<(), 
                             rt: state.right_trigger_bool(),
                             l_stick: state.left_thumb_button(),
                             r_stick: state.right_thumb_button(),
+                            start: state.start_button(),
+                            select: state.select_button(),
                         },
                     };
                     

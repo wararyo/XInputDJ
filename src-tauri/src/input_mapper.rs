@@ -1,4 +1,4 @@
-use crate::midi_handler::send_cc_change;
+use crate::midi_handler::{send_cc_change, send_note_on, send_note_off};
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -6,16 +6,16 @@ use std::f32::consts::PI;
 use crate::xinput_handler::{ControllerState, ButtonState};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum StickType {
+enum DeckType {
     Left,
     Right,
 }
 
-impl StickType {
+impl DeckType {
     fn midi_channel(&self) -> u8 {
         match self {
-            StickType::Left => 0,
-            StickType::Right => 1,
+            DeckType::Left => 0,
+            DeckType::Right => 1,
         }
     }
 }
@@ -23,65 +23,94 @@ impl StickType {
 #[derive(Debug, Clone, Copy)]
 // スティックからCC値の変換方法
 enum Behavior {
-    Absolute,    // 通常の角度→CC値の変換
-    Relative // 角度の差分→CC値の変換
+    CCAbsolute,    // 通常の角度→CC値の変換
+    CCRelative,    // 角度の差分→CC値の変換
+    Note,          // ノートオン/オフの送信
 }
 
 // CCマッピング用の構造体
 struct CCMapping {
     button_getter: fn(&ButtonState) -> bool,
-    cc_number: u8,
+    control_number: u8,  // CCナンバーまたはノートナンバー
     description: &'static str,
-    stick: StickType,
+    deck: DeckType,
     behavior: Behavior,
 }
 
 lazy_static::lazy_static! {
     static ref RUNNING: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
-    static ref CURRENT_CC: Arc<Mutex<[(StickType, u8); 2]>> = Arc::new(Mutex::new([
-        (StickType::Left, 28),
-        (StickType::Right, 28),
+    static ref CURRENT_CC: Arc<Mutex<[(DeckType, u8); 2]>> = Arc::new(Mutex::new([
+        (DeckType::Left, 28),
+        (DeckType::Right, 28),
     ]));
     static ref LAST_STICK_POS: Arc<Mutex<[(f32, f32); 2]>> = Arc::new(Mutex::new([
         (0.0, 0.0), // Left stick (x, y)
         (0.0, 0.0), // Right stick (x, y)
     ]));
+    static ref LAST_BUTTON_STATE: Arc<Mutex<Option<ButtonState>>> = Arc::new(Mutex::new(None));
 
-    // すべてのCCマッピング
-    static ref CC_MAPPINGS: Vec<CCMapping> = vec![
-        // 左スティックのマッピング
-        CCMapping { button_getter: |b| b.down, cc_number: 25, description: "Down", stick: StickType::Left, behavior: Behavior::Absolute },
-        CCMapping { button_getter: |b| b.left, cc_number: 26, description: "Left", stick: StickType::Left, behavior: Behavior::Absolute },
-        CCMapping { button_getter: |b| b.up, cc_number: 24, description: "Up", stick: StickType::Left, behavior: Behavior::Absolute },
-        CCMapping { button_getter: |b| b.right, cc_number: 23, description: "Right", stick: StickType::Left, behavior: Behavior::Absolute },
-        CCMapping { button_getter: |b| b.l, cc_number: 28, description: "L", stick: StickType::Left, behavior: Behavior::Absolute },
-        CCMapping { button_getter: |b| b.lt, cc_number: 9, description: "LT", stick: StickType::Left, behavior: Behavior::Absolute },
-        CCMapping { button_getter: |b| b.l_stick, cc_number: 6, description: "L stick", stick: StickType::Left, behavior: Behavior::Relative },
+    // レイヤーA（通常時）のCCマッピング
+    static ref CC_MAPPINGS_A: Vec<CCMapping> = vec![
+        // 左デッキのマッピング
+        CCMapping { button_getter: |b| b.down, control_number: 25, description: "Down", deck: DeckType::Left, behavior: Behavior::CCAbsolute },
+        CCMapping { button_getter: |b| b.left, control_number: 26, description: "Left", deck: DeckType::Left, behavior: Behavior::CCAbsolute },
+        CCMapping { button_getter: |b| b.up, control_number: 24, description: "Up", deck: DeckType::Left, behavior: Behavior::CCAbsolute },
+        CCMapping { button_getter: |b| b.right, control_number: 23, description: "Right", deck: DeckType::Left, behavior: Behavior::CCAbsolute },
+        CCMapping { button_getter: |b| b.l, control_number: 28, description: "L", deck: DeckType::Left, behavior: Behavior::CCAbsolute },
+        CCMapping { button_getter: |b| b.lt, control_number: 9, description: "LT", deck: DeckType::Left, behavior: Behavior::CCAbsolute },
+        CCMapping { button_getter: |b| b.l_stick, control_number: 6, description: "L stick", deck: DeckType::Left, behavior: Behavior::CCRelative },
         
-        // 右スティックのマッピング
-        CCMapping { button_getter: |b| b.south, cc_number: 25, description: "South", stick: StickType::Right, behavior: Behavior::Absolute },
-        CCMapping { button_getter: |b| b.east, cc_number: 26, description: "East", stick: StickType::Right, behavior: Behavior::Absolute },
-        CCMapping { button_getter: |b| b.north, cc_number: 24, description: "North", stick: StickType::Right, behavior: Behavior::Absolute },
-        CCMapping { button_getter: |b| b.west, cc_number: 23, description: "West", stick: StickType::Right, behavior: Behavior::Absolute },
-        CCMapping { button_getter: |b| b.r, cc_number: 28, description: "R", stick: StickType::Right, behavior: Behavior::Absolute },
-        CCMapping { button_getter: |b| b.rt, cc_number: 9, description: "RT", stick: StickType::Right, behavior: Behavior::Absolute },
-        CCMapping { button_getter: |b| b.r_stick, cc_number: 6, description: "R stick", stick: StickType::Right, behavior: Behavior::Relative },
+        // 右デッキのマッピング
+        CCMapping { button_getter: |b| b.south, control_number: 25, description: "South", deck: DeckType::Right, behavior: Behavior::CCAbsolute },
+        CCMapping { button_getter: |b| b.east, control_number: 26, description: "East", deck: DeckType::Right, behavior: Behavior::CCAbsolute },
+        CCMapping { button_getter: |b| b.north, control_number: 24, description: "North", deck: DeckType::Right, behavior: Behavior::CCAbsolute },
+        CCMapping { button_getter: |b| b.west, control_number: 23, description: "West", deck: DeckType::Right, behavior: Behavior::CCAbsolute },
+        CCMapping { button_getter: |b| b.r, control_number: 28, description: "R", deck: DeckType::Right, behavior: Behavior::CCAbsolute },
+        CCMapping { button_getter: |b| b.rt, control_number: 9, description: "RT", deck: DeckType::Right, behavior: Behavior::CCAbsolute },
+        CCMapping { button_getter: |b| b.r_stick, control_number: 6, description: "R stick", deck: DeckType::Right, behavior: Behavior::CCRelative },
+    ];
+
+    // レイヤーB（スタート/セレクトボタン押下時）のCCマッピング
+    static ref CC_MAPPINGS_B: Vec<CCMapping> = vec![
+        // 左デッキのマッピング
+        CCMapping { button_getter: |b| b.down, control_number: 0, description: "Down (Note 0)", deck: DeckType::Left, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.left, control_number: 1, description: "Left (Note 1)", deck: DeckType::Left, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.up, control_number: 20, description: "Up (Note 20)", deck: DeckType::Left, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.right, control_number: 2, description: "Right (Note 2)", deck: DeckType::Left, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.l, control_number: 21, description: "L (Note 21)", deck: DeckType::Left, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.lt, control_number: 22, description: "LT (Note 22)", deck: DeckType::Left, behavior: Behavior::Note },
+        
+        // 右デッキのマッピング
+        CCMapping { button_getter: |b| b.south, control_number: 0, description: "A (Note 0)", deck: DeckType::Right, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.east, control_number: 2, description: "B (Note 2)", deck: DeckType::Right, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.north, control_number: 20, description: "Y (Note 20)", deck: DeckType::Right, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.west, control_number: 1, description: "X (Note 1)", deck: DeckType::Right, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.r, control_number: 21, description: "R (Note 21)", deck: DeckType::Right, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.rt, control_number: 22, description: "RT (Note 22)", deck: DeckType::Right, behavior: Behavior::Note },
     ];
 }
 
-fn get_current_cc(stick: StickType) -> u8 {
-    let current_cc = CURRENT_CC.lock().unwrap();
-    match stick {
-        StickType::Left => current_cc[0].1,
-        StickType::Right => current_cc[1].1,
+fn get_active_mappings(state: &ControllerState) -> &'static Vec<CCMapping> {
+    if state.buttons.start || state.buttons.select {
+        &CC_MAPPINGS_B
+    } else {
+        &CC_MAPPINGS_A
     }
 }
 
-fn set_current_cc(stick: StickType, cc: u8) {
+fn get_current_cc(deck: DeckType) -> u8 {
+    let current_cc = CURRENT_CC.lock().unwrap();
+    match deck {
+        DeckType::Left => current_cc[0].1,
+        DeckType::Right => current_cc[1].1,
+    }
+}
+
+fn set_current_cc(deck: DeckType, cc: u8) {
     let mut current_cc = CURRENT_CC.lock().unwrap();
-    match stick {
-        StickType::Left => current_cc[0].1 = cc,
-        StickType::Right => current_cc[1].1 = cc,
+    match deck {
+        DeckType::Left => current_cc[0].1 = cc,
+        DeckType::Right => current_cc[1].1 = cc,
     }
 }
 
@@ -94,16 +123,25 @@ pub fn start_mapping() -> Sender<ControllerState> {
     }
 
     println!("\nInitial CC mappings:");
-    println!("Left stick: CC#{}", get_current_cc(StickType::Left));
-    println!("Right stick: CC#{}", get_current_cc(StickType::Right));
-    println!("\nAvailable CC mappings:");
-    println!("Left stick:");
-    for mapping in CC_MAPPINGS.iter().filter(|m| matches!(m.stick, StickType::Left)) {
-        println!("  {} button: CC#{}", mapping.description, mapping.cc_number);
+    println!("Left deck: CC#{}", get_current_cc(DeckType::Left));
+    println!("Right deck: CC#{}", get_current_cc(DeckType::Right));
+    println!("\nAvailable CC mappings (Layer A):");
+    println!("Left deck:");
+    for mapping in CC_MAPPINGS_A.iter().filter(|m| matches!(m.deck, DeckType::Left)) {
+        println!("  {} button: CC#{}", mapping.description, mapping.control_number);
     }
-    println!("Right stick:");
-    for mapping in CC_MAPPINGS.iter().filter(|m| matches!(m.stick, StickType::Right)) {
-        println!("  {} button: CC#{}", mapping.description, mapping.cc_number);
+    println!("Right deck:");
+    for mapping in CC_MAPPINGS_A.iter().filter(|m| matches!(m.deck, DeckType::Right)) {
+        println!("  {} button: CC#{}", mapping.description, mapping.control_number);
+    }
+    println!("\nAvailable CC mappings (Layer B - Start/Select button):");
+    println!("Left deck:");
+    for mapping in CC_MAPPINGS_B.iter().filter(|m| matches!(m.deck, DeckType::Left)) {
+        println!("  {} button: Note#{}", mapping.description, mapping.control_number);
+    }
+    println!("Right deck:");
+    for mapping in CC_MAPPINGS_B.iter().filter(|m| matches!(m.deck, DeckType::Right)) {
+        println!("  {} button: Note#{}", mapping.description, mapping.control_number);
     }
     println!("");
 
@@ -140,13 +178,13 @@ fn calculate_midi_cc_value_absolute(x: f32, y: f32, deadzone: f32) -> Option<u8>
     Some((value * 127.0) as u8)
 }
 
-fn calculate_midi_cc_value_relative(x: f32, y: f32, stick: StickType, deadzone: f32) -> Option<u8> {
+fn calculate_midi_cc_value_relative(x: f32, y: f32, deck: DeckType, deadzone: f32) -> Option<u8> {
     let distance = (x * x + y * y).sqrt();
     let angle = f32::atan2(x, y);
     let mut last_stick_pos = LAST_STICK_POS.lock().unwrap();
-    let stick_idx = match stick {
-        StickType::Left => 0,
-        StickType::Right => 1,
+    let stick_idx = match deck {
+        DeckType::Left => 0,
+        DeckType::Right => 1,
     };
 
     // デッドゾーン内の場合は何もしない
@@ -188,16 +226,16 @@ fn calculate_midi_cc_value_relative(x: f32, y: f32, stick: StickType, deadzone: 
     }
 }
 
-fn update_cc_if_changed(stick: StickType, new_cc: u8, description: &str, last_cc: &mut u8) -> bool {
-    if new_cc != *last_cc {
-        *last_cc = new_cc;
-        set_current_cc(stick, new_cc);
-        println!("{} stick CC changed to: {} ({})", 
-            match stick {
-                StickType::Left => "Left",
-                StickType::Right => "Right",
+fn update_cc_if_changed(deck: DeckType, new_control_number: u8, description: &str, last_control_number: &mut u8) -> bool {
+    if new_control_number != *last_control_number {
+        *last_control_number = new_control_number;
+        set_current_cc(deck, new_control_number);
+        println!("{} deck control number changed to: {} ({})", 
+            match deck {
+                DeckType::Left => "Left",
+                DeckType::Right => "Right",
             },
-            new_cc,
+            new_control_number,
             description
         );
         true
@@ -206,50 +244,88 @@ fn update_cc_if_changed(stick: StickType, new_cc: u8, description: &str, last_cc
     }
 }
 
-fn process_stick(x: f32, y: f32, cc: u8, stick: StickType, deadzone: f32) {
+fn process_stick(x: f32, y: f32, control_number: u8, deck: DeckType, deadzone: f32) {
     // 現在のCCに対応するBehaviorを取得
-    let behavior = CC_MAPPINGS.iter()
-        .find(|m| m.cc_number == cc && m.stick == stick)
+    let behavior = CC_MAPPINGS_A.iter()
+        .find(|m| m.control_number == control_number && m.deck == deck)
         .map(|m| m.behavior)
-        .unwrap_or(Behavior::Absolute);
+        .unwrap_or(Behavior::CCAbsolute);
 
     let midi_value = match behavior {
-        Behavior::Absolute => calculate_midi_cc_value_absolute(x, y, deadzone),
-        Behavior::Relative => calculate_midi_cc_value_relative(x, y, stick, deadzone),
+        Behavior::CCAbsolute => calculate_midi_cc_value_absolute(x, y, deadzone),
+        Behavior::CCRelative => calculate_midi_cc_value_relative(x, y, deck, deadzone),
+        _ => None,
     };
 
     if let Some(value) = midi_value {
-        if let Err(e) = send_cc_change(stick.midi_channel(), cc, value) {
-            eprintln!("Failed to send MIDI CC ({} Stick): {:?}", 
-                match stick {
-                    StickType::Left => "Left",
-                    StickType::Right => "Right",
-                }, 
+        if let Err(e) = send_cc_change(deck.midi_channel(), control_number, value) {
+            eprintln!("Failed to send MIDI CC ({} Deck): {:?}",
+                match deck {
+                    DeckType::Left => "Left",
+                    DeckType::Right => "Right",
+                },
                 e
             );
         }
     }
 }
 
-fn process_cc_mapping(state: &ControllerState, last_left_cc: &mut u8, last_right_cc: &mut u8) {
-    for mapping in CC_MAPPINGS.iter() {
-        if (mapping.button_getter)(&state.buttons) {
-            match mapping.stick {
-                StickType::Left => {
-                    update_cc_if_changed(StickType::Left, mapping.cc_number, mapping.description, last_left_cc);
-                },
-                StickType::Right => {
-                    update_cc_if_changed(StickType::Right, mapping.cc_number, mapping.description, last_right_cc);
+fn process_button(state: &ControllerState, last_left_cc: &mut u8, last_right_cc: &mut u8) {
+    let active_mappings = get_active_mappings(state);
+    let mut last_button_state = LAST_BUTTON_STATE.lock().unwrap();
+    
+    for mapping in active_mappings.iter() {
+        let current_pressed = (mapping.button_getter)(&state.buttons);
+        let was_pressed = last_button_state.as_ref().map_or(false, |last_state| (mapping.button_getter)(last_state));
+        
+        match mapping.behavior {
+            Behavior::Note => {
+                if current_pressed && !was_pressed {
+                    // ボタンが押された瞬間
+                    if let Err(e) = send_note_on(mapping.deck.midi_channel(), mapping.control_number, 127) {
+                        eprintln!("Failed to send MIDI Note On ({} Deck): {:?}",
+                            match mapping.deck {
+                                DeckType::Left => "Left",
+                                DeckType::Right => "Right",
+                            },
+                            e
+                        );
+                    }
+                } else if !current_pressed && was_pressed {
+                    // ボタンが離された瞬間
+                    if let Err(e) = send_note_off(mapping.deck.midi_channel(), mapping.control_number) {
+                        eprintln!("Failed to send MIDI Note Off ({} Deck): {:?}",
+                            match mapping.deck {
+                                DeckType::Left => "Left",
+                                DeckType::Right => "Right",
+                            },
+                            e
+                        );
+                    }
+                }
+            },
+            _ => if current_pressed {
+                // CCの場合は従来通りの処理
+                match mapping.deck {
+                    DeckType::Left => {
+                        update_cc_if_changed(DeckType::Left, mapping.control_number, mapping.description, last_left_cc);
+                    },
+                    DeckType::Right => {
+                        update_cc_if_changed(DeckType::Right, mapping.control_number, mapping.description, last_right_cc);
+                    }
                 }
             }
         }
     }
+
+    // 現在の状態を保存
+    *last_button_state = Some(state.buttons.clone());
 }
 
 fn handle_controller_events(rx: Receiver<ControllerState>) {
     const DEADZONE: f32 = 0.75;
-    let mut last_left_cc = get_current_cc(StickType::Left);
-    let mut last_right_cc = get_current_cc(StickType::Right);
+    let mut last_left_cc = get_current_cc(DeckType::Left);
+    let mut last_right_cc = get_current_cc(DeckType::Right);
 
     while *RUNNING.lock().unwrap() {
         match rx.recv() {
@@ -257,12 +333,12 @@ fn handle_controller_events(rx: Receiver<ControllerState>) {
                 let [left_x, left_y] = state.sticks.left;
                 let [right_x, right_y] = state.sticks.right;
                 
-                // CCナンバー変更チェック
-                process_cc_mapping(&state, &mut last_left_cc, &mut last_right_cc);
+                // ボタンの処理
+                process_button(&state, &mut last_left_cc, &mut last_right_cc);
                 
                 // スティックの処理
-                process_stick(left_x, left_y, last_left_cc, StickType::Left, DEADZONE);
-                process_stick(right_x, right_y, last_right_cc, StickType::Right, DEADZONE);
+                process_stick(left_x, left_y, last_left_cc, DeckType::Left, DEADZONE);
+                process_stick(right_x, right_y, last_right_cc, DeckType::Right, DEADZONE);
             }
             Err(_) => break,
         }

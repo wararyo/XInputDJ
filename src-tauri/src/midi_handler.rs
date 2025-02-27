@@ -63,3 +63,27 @@ pub fn send_cc_change(channel: u8, controller: u8, value: u8) -> Result<(), Stri
         Err("No MIDI connection available".to_string())
     }
 }
+
+pub fn send_note_on(channel: u8, note: u8, velocity: u8) -> Result<(), String> {
+    let mut midi_conn = MIDI_CONNECTION.lock().unwrap();
+    if let Some(conn) = midi_conn.as_mut() {
+        // MIDI Note On message: Status byte (0x90 | channel), note number, velocity
+        let message = [0x90 | (channel & 0x0F), note & 0x7F, velocity & 0x7F];
+        conn.send(&message).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("No MIDI connection available".to_string())
+    }
+}
+
+pub fn send_note_off(channel: u8, note: u8) -> Result<(), String> {
+    let mut midi_conn = MIDI_CONNECTION.lock().unwrap();
+    if let Some(conn) = midi_conn.as_mut() {
+        // MIDI Note Off message: Status byte (0x80 | channel), note number, velocity (always 0)
+        let message = [0x80 | (channel & 0x0F), note & 0x7F, 0];
+        conn.send(&message).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("No MIDI connection available".to_string())
+    }
+}
