@@ -9,6 +9,7 @@ use crate::xinput_handler::{ControllerState, ButtonState};
 enum DeckType {
     Left,
     Right,
+    Common,
 }
 
 impl DeckType {
@@ -16,6 +17,7 @@ impl DeckType {
         match self {
             DeckType::Left => 0,
             DeckType::Right => 1,
+            DeckType::Common => 15,
         }
     }
 }
@@ -79,6 +81,7 @@ lazy_static::lazy_static! {
         CCMapping { button_getter: |b| b.right, control_number: 2, description: "Right (Note 2)", deck: DeckType::Left, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.l, control_number: 21, description: "L (Note 21)", deck: DeckType::Left, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.lt, control_number: 22, description: "LT (Note 22)", deck: DeckType::Left, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.l_stick, control_number: 7, description: "L stick (Note 7)", deck: DeckType::Common, behavior: Behavior::Note },
         
         // 右デッキのマッピング
         CCMapping { button_getter: |b| b.south, control_number: 0, description: "A (Note 0)", deck: DeckType::Right, behavior: Behavior::Note },
@@ -87,6 +90,7 @@ lazy_static::lazy_static! {
         CCMapping { button_getter: |b| b.west, control_number: 1, description: "X (Note 1)", deck: DeckType::Right, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.r, control_number: 21, description: "R (Note 21)", deck: DeckType::Right, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.rt, control_number: 22, description: "RT (Note 22)", deck: DeckType::Right, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.r_stick, control_number: 7, description: "R stick (Note 7)", deck: DeckType::Common, behavior: Behavior::Note },
     ];
 }
 
@@ -103,6 +107,7 @@ fn get_current_cc(deck: DeckType) -> u8 {
     match deck {
         DeckType::Left => current_cc[0].1,
         DeckType::Right => current_cc[1].1,
+        DeckType::Common => unreachable!("DeckType common doesn't have a CC number"),
     }
 }
 
@@ -111,6 +116,7 @@ fn set_current_cc(deck: DeckType, cc: u8) {
     match deck {
         DeckType::Left => current_cc[0].1 = cc,
         DeckType::Right => current_cc[1].1 = cc,
+        DeckType::Common => unreachable!("DeckType common doesn't have a CC number"),
     }
 }
 
@@ -178,23 +184,18 @@ fn calculate_midi_cc_value_absolute(x: f32, y: f32, deadzone: f32) -> Option<u8>
     Some((value * 127.0) as u8)
 }
 
-fn calculate_midi_cc_value_relative(x: f32, y: f32, deck: DeckType, deadzone: f32) -> Option<u8> {
+fn calculate_midi_cc_value_relative(x: f32, y: f32, deck: DeckType, deadzone: f32, steps: f32) -> Option<u8> {
     let distance = (x * x + y * y).sqrt();
     let angle = f32::atan2(x, y);
     let mut last_stick_pos = LAST_STICK_POS.lock().unwrap();
     let stick_idx = match deck {
         DeckType::Left => 0,
         DeckType::Right => 1,
+        DeckType::Common => unreachable!("DeckType common doesn't have a stick"),
     };
 
-    // デッドゾーン内の場合は何もしない
+    // デッドゾーン内の場合は現在の位置を保存して終了
     if distance < deadzone {
-        last_stick_pos[stick_idx] = (0.0, 0.0);
-        return None;
-    }
-
-    // 初回の場合は現在の角度を保存して終了
-    if last_stick_pos[stick_idx] == (0.0, 0.0) {
         last_stick_pos[stick_idx] = (x, y);
         return None;
     }
@@ -207,13 +208,13 @@ fn calculate_midi_cc_value_relative(x: f32, y: f32, deck: DeckType, deadzone: f3
     // 境界をまたぐ場合の補正
     if diff > PI {
         diff -= 2.0 * PI;
-    } else if diff < -PI {
+    } else if diff <= -PI {
         diff += 2.0 * PI;
     }
     
     // 一周を720として正規化
-    let normalized = diff / (PI * 2.0) * 720.0;
-    let mut value = normalized.round().min(127.0).max(-127.0) as i32;
+    let normalized = diff / (PI * 2.0) * steps;
+    let mut value = normalized.trunc().min(127.0).max(-127.0) as i32;
     if value < 0 {
         value += 128;
     }
@@ -234,6 +235,7 @@ fn update_cc_if_changed(deck: DeckType, new_control_number: u8, description: &st
             match deck {
                 DeckType::Left => "Left",
                 DeckType::Right => "Right",
+                DeckType::Common => unreachable!("DeckType common doesn't have a CC number"),
             },
             new_control_number,
             description
@@ -253,7 +255,7 @@ fn process_stick(x: f32, y: f32, control_number: u8, deck: DeckType, deadzone: f
 
     let midi_value = match behavior {
         Behavior::CCAbsolute => calculate_midi_cc_value_absolute(x, y, deadzone),
-        Behavior::CCRelative => calculate_midi_cc_value_relative(x, y, deck, deadzone),
+        Behavior::CCRelative => calculate_midi_cc_value_relative(x, y, deck, deadzone, 720.0),
         _ => None,
     };
 
@@ -263,6 +265,7 @@ fn process_stick(x: f32, y: f32, control_number: u8, deck: DeckType, deadzone: f
                 match deck {
                     DeckType::Left => "Left",
                     DeckType::Right => "Right",
+                    DeckType::Common => "Common",
                 },
                 e
             );
@@ -287,6 +290,7 @@ fn process_button(state: &ControllerState, last_left_cc: &mut u8, last_right_cc:
                             match mapping.deck {
                                 DeckType::Left => "Left",
                                 DeckType::Right => "Right",
+                                DeckType::Common => "Common",
                             },
                             e
                         );
@@ -298,6 +302,7 @@ fn process_button(state: &ControllerState, last_left_cc: &mut u8, last_right_cc:
                             match mapping.deck {
                                 DeckType::Left => "Left",
                                 DeckType::Right => "Right",
+                                DeckType::Common => "Common",
                             },
                             e
                         );
@@ -312,7 +317,8 @@ fn process_button(state: &ControllerState, last_left_cc: &mut u8, last_right_cc:
                     },
                     DeckType::Right => {
                         update_cc_if_changed(DeckType::Right, mapping.control_number, mapping.description, last_right_cc);
-                    }
+                    },
+                    DeckType::Common => (), // Commonの場合は何もしない
                 }
             }
         }
@@ -337,8 +343,29 @@ fn handle_controller_events(rx: Receiver<ControllerState>) {
                 process_button(&state, &mut last_left_cc, &mut last_right_cc);
                 
                 // スティックの処理
-                process_stick(left_x, left_y, last_left_cc, DeckType::Left, DEADZONE);
-                process_stick(right_x, right_y, last_right_cc, DeckType::Right, DEADZONE);
+                if state.buttons.start || state.buttons.select {
+                    // レイヤーBではスティックの挙動はライブラリの曲選択で固定
+                    let midi_value = (
+                        calculate_midi_cc_value_relative(left_x, left_y, DeckType::Left, DEADZONE, 12.0),
+                        calculate_midi_cc_value_relative(right_x, right_y, DeckType::Right, DEADZONE, 12.0)
+                    );
+
+                    if let Some(value) = midi_value.0 {
+                        if let Err(e) = send_cc_change(DeckType::Common.midi_channel(), 0, value) {
+                            eprintln!("Failed to send MIDI CC (Common Deck): {:?}", e);
+                        }
+                    }
+                    if let Some(value) = midi_value.1 {
+                        if let Err(e) = send_cc_change(DeckType::Common.midi_channel(), 0, value) {
+                            eprintln!("Failed to send MIDI CC (Common Deck): {:?}", e);
+                        }
+                    }
+                } else {
+                    // レイヤーAでは現在設定されているCCに応じた挙動を行う
+                    process_stick(left_x, left_y, last_left_cc, DeckType::Left, DEADZONE);
+                    process_stick(right_x, right_y, last_right_cc, DeckType::Right, DEADZONE);
+                }
+
             }
             Err(_) => break,
         }
