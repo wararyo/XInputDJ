@@ -49,19 +49,19 @@ R3: 右スティックの機能をジョグに設定
 左スティック: ライブラリ上下
 十字キー下: デッキ1 PLAY
 十字キー左: デッキ1 CUE
-十字キー上: デッキ1 HOT CUE 1
+十字キー上: デッキ1 PFL
 十字キー右: デッキ1 SYNC
-L: デッキ1 HOT CUE 2
-LT: デッキ1 HOT CUE 3
+L: デッキ1 HOT CUE 1
+LT: デッキ1 HOT CUE 2
 L3: ライブラリフォーカス移動
 
 右スティック: ライブラリ上下
 A: デッキ2 PLAY
 B: デッキ2 CUE
-Y: デッキ2 HOT CUE 1
+Y: デッキ2 PFL
 X: デッキ2 SYNC
-R: デッキ2 HOT CUE 2
-RT: デッキ2 HOT CUE 3
+R: デッキ2 HOT CUE 1
+RT: デッキ2 HOT CUE 2
 R3: ライブラリフォーカス移動
 
 セレクト短押し: デッキ1に曲をロード

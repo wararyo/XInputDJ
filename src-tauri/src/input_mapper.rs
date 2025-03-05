@@ -86,19 +86,19 @@ lazy_static::lazy_static! {
         // 左デッキのマッピング
         CCMapping { button_getter: |b| b.down, cc_number: None, note_number: Some(0), description: "Down (Note 0)", deck: DeckType::Left, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.left, cc_number: None, note_number: Some(1), description: "Left (Note 1)", deck: DeckType::Left, behavior: Behavior::Note },
-        CCMapping { button_getter: |b| b.up, cc_number: None, note_number: Some(20), description: "Up (Note 20)", deck: DeckType::Left, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.up, cc_number: None, note_number: Some(27), description: "Up (Note 27)", deck: DeckType::Left, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.right, cc_number: None, note_number: Some(2), description: "Right (Note 2)", deck: DeckType::Left, behavior: Behavior::Note },
-        CCMapping { button_getter: |b| b.l, cc_number: None, note_number: Some(21), description: "L (Note 21)", deck: DeckType::Left, behavior: Behavior::Note },
-        CCMapping { button_getter: |b| b.lt, cc_number: None, note_number: Some(22), description: "LT (Note 22)", deck: DeckType::Left, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.l, cc_number: None, note_number: Some(20), description: "L (Note 20)", deck: DeckType::Left, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.lt, cc_number: None, note_number: Some(21), description: "LT (Note 21)", deck: DeckType::Left, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.l_stick, cc_number: None, note_number: Some(7), description: "L stick (Note 7)", deck: DeckType::Common, behavior: Behavior::Note },
         
         // 右デッキのマッピング
         CCMapping { button_getter: |b| b.south, cc_number: None, note_number: Some(0), description: "A (Note 0)", deck: DeckType::Right, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.east, cc_number: None, note_number: Some(2), description: "B (Note 2)", deck: DeckType::Right, behavior: Behavior::Note },
-        CCMapping { button_getter: |b| b.north, cc_number: None, note_number: Some(20), description: "Y (Note 20)", deck: DeckType::Right, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.north, cc_number: None, note_number: Some(27), description: "Y (Note 27)", deck: DeckType::Right, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.west, cc_number: None, note_number: Some(1), description: "X (Note 1)", deck: DeckType::Right, behavior: Behavior::Note },
-        CCMapping { button_getter: |b| b.r, cc_number: None, note_number: Some(21), description: "R (Note 21)", deck: DeckType::Right, behavior: Behavior::Note },
-        CCMapping { button_getter: |b| b.rt, cc_number: None, note_number: Some(22), description: "RT (Note 22)", deck: DeckType::Right, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.r, cc_number: None, note_number: Some(20), description: "R (Note 20)", deck: DeckType::Right, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.rt, cc_number: None, note_number: Some(21), description: "RT (Note 21)", deck: DeckType::Right, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.r_stick, cc_number: None, note_number: Some(7), description: "R stick (Note 7)", deck: DeckType::Common, behavior: Behavior::Note },
     ];
 }
@@ -229,7 +229,7 @@ fn calculate_midi_cc_value_relative(x: f32, y: f32, deck: DeckType, deadzone: f3
         diff += 2.0 * PI;
     }
     
-    // 一周を720として正規化
+    // 一周をstepsステップとして正規化
     let normalized = diff / (PI * 2.0) * steps;
     let mut value = normalized.trunc().min(127.0).max(-127.0) as i32;
     if value < 0 {
@@ -321,7 +321,7 @@ fn process_stick(x: f32, y: f32, control_number: u8, deck: DeckType, deadzone_cc
         // CC処理
         let midi_value = match mapping.behavior {
             Behavior::CCAbsolute => calculate_midi_cc_value_absolute(x, y, deadzone_cc),
-            Behavior::CCRelative => calculate_midi_cc_value_relative(x, y, deck, deadzone_cc, 720.0),
+            Behavior::CCRelative => calculate_midi_cc_value_relative(x, y, deck, deadzone_cc, 360.0),
             _ => None,
         };
 
