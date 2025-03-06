@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::f32::consts::PI;
 use crate::xinput_handler::{ControllerState, ButtonState};
+use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum DeckType {
@@ -42,6 +43,10 @@ struct CCMapping {
 
 lazy_static::lazy_static! {
     static ref RUNNING: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+    // ボタンの押下時刻を記録
+    static ref SPECIAL_BUTTON_PRESS_TIME: Arc<Mutex<(Option<Instant>, Option<Instant>)>> = Arc::new(Mutex::new((None, None))); // (start, select)
+    // スタート/セレクトボタンの押下状態
+    static ref SPECIAL_BUTTON_STATE: Arc<Mutex<(bool, bool)>> = Arc::new(Mutex::new((false, false))); // (start, select)
     // 右デッキと左デッキそれぞれにアサインされているCC値
     static ref CURRENT_CC: Arc<Mutex<[(DeckType, u8); 2]>> = Arc::new(Mutex::new([
         (DeckType::Left, 28),
@@ -101,6 +106,11 @@ lazy_static::lazy_static! {
         CCMapping { button_getter: |b| b.rt, cc_number: None, note_number: Some(21), description: "RT (Note 21)", deck: DeckType::Right, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.r_stick, cc_number: None, note_number: Some(7), description: "R stick (Note 7)", deck: DeckType::Common, behavior: Behavior::Note },
     ];
+}
+
+// スタート/セレクトボタンの短押し判定（500ms以内）
+fn is_quick_press(press_time: Option<Instant>) -> bool {
+    press_time.map_or(false, |time| time.elapsed().as_millis() < 500)
 }
 
 fn get_active_mappings(state: &ControllerState) -> &'static Vec<CCMapping> {
@@ -343,7 +353,58 @@ fn process_stick(x: f32, y: f32, control_number: u8, deck: DeckType, deadzone_cc
 fn process_button(state: &ControllerState, last_left_cc: &mut u8, last_right_cc: &mut u8) {
     let active_mappings = get_active_mappings(state);
     let mut last_button_state = LAST_BUTTON_STATE.lock().unwrap();
+    let mut special_button_press_time = SPECIAL_BUTTON_PRESS_TIME.lock().unwrap();
+    let mut special_button_state = SPECIAL_BUTTON_STATE.lock().unwrap();
     
+    // スペシャルボタン(スタート/セレクトボタン)の処理
+    let was_start_pressed = last_button_state.as_ref().map_or(false, |last_state| last_state.start);
+    let was_select_pressed = last_button_state.as_ref().map_or(false, |last_state| last_state.select);
+    if state.buttons.start != was_start_pressed {
+        if state.buttons.start {
+            // 押された時
+            if was_select_pressed {
+                special_button_press_time.0 = Some(Instant::now());
+            }
+            special_button_state.0 = true;
+        } else {
+            // 離された時
+            if special_button_state.0 && state.buttons.select && is_quick_press(special_button_press_time.0) {
+                // スタートボタンの短押し処理
+                if let Err(e) = send_note_on(DeckType::Common.midi_channel(), 3, 127) {
+                    eprintln!("Failed to send Note On for Start button: {:?}", e);
+                }
+                if let Err(e) = send_note_off(DeckType::Common.midi_channel(), 3) {
+                    eprintln!("Failed to send Note Off for Start button: {:?}", e);
+                }
+            }
+            special_button_press_time.0 = None;
+            special_button_state.0 = false;
+        }
+    }
+    if state.buttons.select != was_select_pressed {
+        if state.buttons.select {
+            // 押された時
+            if was_start_pressed {
+                special_button_press_time.1 = Some(Instant::now());
+            }
+            special_button_state.1 = true;
+        } else {
+            // 離された時
+            if special_button_state.1 && state.buttons.start && is_quick_press(special_button_press_time.1) {
+                // セレクトボタンの短押し処理
+                if let Err(e) = send_note_on(DeckType::Common.midi_channel(), 2, 127) {
+                    eprintln!("Failed to send Note On for Select button: {:?}", e);
+                }
+                if let Err(e) = send_note_off(DeckType::Common.midi_channel(), 2) {
+                    eprintln!("Failed to send Note Off for Select button: {:?}", e);
+                }
+            }
+            special_button_press_time.1 = None;
+            special_button_state.1 = false;
+        }
+    }
+
+    // 通常のボタンマッピング処理
     for mapping in active_mappings.iter() {
         let current_pressed = (mapping.button_getter)(&state.buttons);
         let was_pressed = last_button_state.as_ref().map_or(false, |last_state| (mapping.button_getter)(last_state));
@@ -379,7 +440,7 @@ fn process_button(state: &ControllerState, last_left_cc: &mut u8, last_right_cc:
                 }
             },
             _ => if current_pressed {
-                // CCの場合は従来通りの処理
+                // CC系マッピングの処理
                 if let Some(cc_number) = mapping.cc_number {
                     match mapping.deck {
                         DeckType::Left => {
