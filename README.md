@@ -6,7 +6,7 @@ Steam DeckやROG AllyなどのゲーミングポータブルPCでの使用を想
 
 ## Getting started
 
-1. Releaseからビルド済みファイルをダウンロードします。
+1. [Release](https://github.com/wararyo/XInputDJ/releases)からビルド済みファイルをダウンロードします。
 2. `binds/Mixxx/controllers` フォルダの中身を `%localappdata%/Mixxx/Controllers` にコピーします。
 3. loopMIDI、LoopBe1などの仮想MIDIデバイスを導入します。(以下、loopMIDIと導入したものとして記述します)
 4. loopMIDIを起動し、そのあとにXInputDJを起動します。
