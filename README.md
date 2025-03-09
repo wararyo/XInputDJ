@@ -1,14 +1,14 @@
 # XInputDJ
 
-このソフトウェアを使用すると、XboxコントローラーなどXInput対応のコントローラーを使用してDJソフトウェアであるMixxxを操作することができるようになる予定です。  
+このソフトウェアを使用すると、XboxコントローラーなどXInput対応のコントローラーを使用してDJソフトウェアであるMixxxを操作することができます。  
 Steam DeckやROG AllyなどのゲーミングポータブルPCでの使用を想定しています。  
-ただし、現時点ではWindowsのみ対応とする予定です。  
+現時点ではWindowsのみに対応しています。  
 
 ## Getting started
 
-1. [Release](https://github.com/wararyo/XInputDJ/releases)からビルド済みファイルをダウンロードします。
+1. [Releases](https://github.com/wararyo/XInputDJ/releases)からビルド済みファイルをダウンロードします。
 2. `binds/Mixxx/controllers` フォルダの中身を `%localappdata%/Mixxx/Controllers` にコピーします。
-3. loopMIDI、LoopBe1などの仮想MIDIデバイスを導入します。(以下、loopMIDIと導入したものとして記述します)
+3. loopMIDI、LoopBe1などの仮想MIDIデバイスを導入します。(以下、loopMIDIを導入したものとして記述します)
 4. loopMIDIを起動し、そのあとにXInputDJを起動します。
 5. XInputDJの画面上でloopMIDIの仮想MIDIデバイスを選択した後、 `Start` を押下します。
 6. Mixxxを起動します。
@@ -38,8 +38,6 @@ R: 右スティックの機能をチャンネルフェーダーに設定
 RT: 右スティックの機能をテンポに設定
 R3: 右スティックの機能をジョグに設定
 
-セレクト短押し: デッキ1のCUE切り替え
-スタート短押し: デッキ2のCUE切り替え
 セレクト長押し: 押している間だけレイヤーBに切り替え
 スタート長押し: 押している間だけレイヤーBに切り替え
 ```
@@ -74,8 +72,6 @@ R3: ライブラリフォーカス移動
 npm install
 npm run tauri dev
 ```
-
-loopMIDIなどの仮想MIDIデバイスを使用してください。
 
 ## Q&A
 
