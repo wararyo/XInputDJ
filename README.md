@@ -4,19 +4,19 @@
 Steam DeckやROG AllyなどのゲーミングポータブルPCでの使用を想定しています。  
 ただし、現時点ではWindowsのみ対応とする予定です。  
 
-## Develop
+## Getting started
 
-```
-npm install
-npm run tauri dev
-```
-
-loopMIDIなどの仮想MIDIデバイスを使用してください。
+1. Releaseからビルド済みファイルをダウンロードします。
+2. `binds/Mixxx/controllers` フォルダの中身を `%localappdata%/Mixxx/Controllers` にコピーします。
+3. loopMIDI、LoopBe1などの仮想MIDIデバイスを導入します。(以下、loopMIDIと導入したものとして記述します)
+4. loopMIDIを起動し、そのあとにXInputDJを起動します。
+5. XInputDJの画面上でloopMIDIの仮想MIDIデバイスを選択した後、 `Start` を押下します。
+6. Mixxxを起動します。
+7. 設定->コントローラー->(仮想MIDIデバイス名) を選択します。
+8. Load Mapping: と書かれたプルダウンから `XInputDJ` を選択します。
+9. OKを押して完了です。
 
 ## Mapping
-
-まだ実装していませんが、下記のようになる予定です。  
-ノブの回転に特化し、PLAYやCUE、SYNCなどのボタンはタッチパネルで押下してもらう想定です。  
 
 レイヤーA
 ```
@@ -51,7 +51,7 @@ R3: 右スティックの機能をジョグに設定
 十字キー左: デッキ1 CUE
 十字キー上: デッキ1 PFL
 十字キー右: デッキ1 SYNC
-L: デッキ1 HOT CUE 1
+L: デッキ1 ループ有効/無効
 LT: デッキ1 HOT CUE 2
 L3: ライブラリフォーカス移動
 
@@ -60,10 +60,38 @@ A: デッキ2 PLAY
 B: デッキ2 CUE
 Y: デッキ2 PFL
 X: デッキ2 SYNC
-R: デッキ2 HOT CUE 1
+R: デッキ2 ループ有効/無効
 RT: デッキ2 HOT CUE 2
 R3: ライブラリフォーカス移動
 
 セレクト短押し: デッキ1に曲をロード
 スタート短押し: デッキ2に曲をロード
 ```
+
+## Develop
+
+```
+npm install
+npm run tauri dev
+```
+
+loopMIDIなどの仮想MIDIデバイスを使用してください。
+
+## Q&A
+
+Q. 私の使ってるDJソフトで使えますか？
+
+A. キーバインドを手動で設定する必要がありますが、MIDIアサイン機能を持つDJソフトウェアであればおそらく使えます。  
+rekordbox、Serato DJ Pro、Virtual DJ、TraktorにはMIDIアサイン機能があります。  
+プルリクエスト歓迎です。
+
+Q. 私の使ってるゲームパッドで使えますか？
+
+A. XInput対応ゲームパッドであれば使えます。  
+Xbox コントローラーはXInputに対応しています。  
+Switch Proコントローラーは残念ながらXInputに対応していませんが、別途変換のためのソフトウェアを用いることでおそらく使用可能です。
+
+Q. Windows以外で使えますか？
+
+A. すみません、現在はWindowsのみの対応となっています。  
+プルリクエスト歓迎です。
