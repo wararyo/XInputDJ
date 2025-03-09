@@ -99,9 +99,9 @@ lazy_static::lazy_static! {
         
         // 右デッキのマッピング
         CCMapping { button_getter: |b| b.south, cc_number: None, note_number: Some(0), description: "A (Note 0)", deck: DeckType::Right, behavior: Behavior::Note },
-        CCMapping { button_getter: |b| b.east, cc_number: None, note_number: Some(2), description: "B (Note 2)", deck: DeckType::Right, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.east, cc_number: None, note_number: Some(1), description: "B (Note 2)", deck: DeckType::Right, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.north, cc_number: None, note_number: Some(27), description: "Y (Note 27)", deck: DeckType::Right, behavior: Behavior::Note },
-        CCMapping { button_getter: |b| b.west, cc_number: None, note_number: Some(1), description: "X (Note 1)", deck: DeckType::Right, behavior: Behavior::Note },
+        CCMapping { button_getter: |b| b.west, cc_number: None, note_number: Some(2), description: "X (Note 1)", deck: DeckType::Right, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.r, cc_number: None, note_number: Some(20), description: "R (Note 20)", deck: DeckType::Right, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.rt, cc_number: None, note_number: Some(21), description: "RT (Note 21)", deck: DeckType::Right, behavior: Behavior::Note },
         CCMapping { button_getter: |b| b.r_stick, cc_number: None, note_number: Some(7), description: "R stick (Note 7)", deck: DeckType::Common, behavior: Behavior::Note },
@@ -202,7 +202,7 @@ fn calculate_midi_cc_value_absolute(x: f32, y: f32, deadzone: f32) -> Option<u8>
     let angle = f32::atan2(x, y);
     
     // 角度を0.0から1.0の範囲に正規化（8時付近で0.0、12時方向が0.5、4時付近で1.0）
-    let mut value = ((angle / PI) * 1.2 / 2.0) + 0.5;
+    let mut value = ((angle / PI) * 1.3 / 2.0) + 0.5;
 
     // 値を0.0から1.0の範囲にクリップ
     value = value.max(0.0).min(1.0);

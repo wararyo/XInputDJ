@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "xinputdj",
-  "version": "0.1.0",
+  "productName": "XInputDJ",
+  "version": "1.0.0",
   "identifier": "com.wararyo.app.xinputdj",
   "build": {
     "beforeDevCommand": "npm run dev",
